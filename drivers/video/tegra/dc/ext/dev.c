@@ -1,7 +1,7 @@
 /*
  * drivers/video/tegra/dc/ext/dev.c
  *
- * Copyright (c) 2011-2016, NVIDIA CORPORATION, All rights reserved.
+ * Copyright (c) 2011-2017, NVIDIA CORPORATION, All rights reserved.
  *
  * Author: Robert Morell <rmorell@nvidia.com>
  * Some code based on fbdev extensions written by:
@@ -284,7 +284,7 @@ int tegra_dc_ext_disable(struct tegra_dc_ext *ext)
 				windows |= BIT(i);
 		}
 
-		tegra_dc_blank(ext->dc, windows);
+		tegra_dc_blank_wins(ext->dc, windows);
 		for_each_set_bit(i, &windows, DC_N_WINDOWS) {
 			tegra_dc_ext_unpin_window(&ext->win[i]);
 		}
@@ -363,6 +363,8 @@ static void tegra_dc_ext_set_windowattr_basic(struct tegra_dc_win *win,
 		win->flags |= TEGRA_WIN_FLAG_BLEND_PREMULT;
 	else if (flip_win->blend == TEGRA_DC_EXT_BLEND_COVERAGE)
 		win->flags |= TEGRA_WIN_FLAG_BLEND_COVERAGE;
+	else if (flip_win->blend == TEGRA_DC_EXT_BLEND_ADD)
+		win->flags |= TEGRA_WIN_FLAG_BLEND_ADD;
 	if (flip_win->flags & TEGRA_DC_EXT_FLIP_FLAG_TILED)
 		win->flags |= TEGRA_WIN_FLAG_TILED;
 	if (flip_win->flags & TEGRA_DC_EXT_FLIP_FLAG_INVERT_H)
@@ -563,15 +565,17 @@ static int tegra_dc_ext_should_show_background(
 		if (flip_win->handle[TEGRA_DC_Y] == NULL)
 			continue;
 
-		/* Bypass expects only a single window, thus it is enough to
-		 * inspect the first enabled window.
-		 *
-		 * Full screen input surface for YUV420 10-bit 4k has 2400x2160
-		 * active area. dc->mode is already adjusted to this dimension.
+		/* Bypass for YUV420 10-bit 4k mode expects only one or two
+		 * windows, depending on packing scheme. The scheme with two
+		 * windows always spans whole acive display area of 2400x2160.
+		 * dc->mode is already adjusted to this dimension. The scheme
+		 * with single window may span smaller region in 2 pixel
+		 * increments vertically and 5 pixel increments horizontally.
+		 * active area.
 		 */
-		if (flip_win->attr.out_x > 0 ||
+		if (flip_win->attr.out_x > 1 ||
 		    flip_win->attr.out_y > 0 ||
-		    flip_win->attr.out_w != dc->mode.h_active ||
+		    flip_win->attr.out_w < dc->mode.h_active-1 ||
 		    flip_win->attr.out_h != dc->mode.v_active)
 			return true;
 	}
@@ -822,7 +826,7 @@ static void tegra_dc_ext_flip_worker(struct kthread_work *work)
 
 	tegra_dc_ext_smooth_apc(vrr);
 
-	/* YUV packing consumes only one window, thus there must have been
+	/* YUV packing consumes at most two windows, thus there must have been
 	 * free window which can host background pattern.
 	 */
 	BUG_ON(show_background);
@@ -1833,7 +1837,7 @@ static long tegra_dc_ioctl(struct file *filp, unsigned int cmd,
 	case TEGRA_DC_EXT_PUT_WINDOW:
 		ret = tegra_dc_ext_put_window(user, arg);
 		if (!ret) {
-			ret = tegra_dc_blank(user->ext->dc, BIT(arg));
+			ret = tegra_dc_blank_wins(user->ext->dc, BIT(arg));
 			if (ret < 0)
 				return ret;
 			tegra_dc_ext_unpin_window(&user->ext->win[arg]);
@@ -2523,7 +2527,7 @@ static int tegra_dc_release(struct inode *inode, struct file *filp)
 	}
 
 	if (ext->dc->enabled) {
-		tegra_dc_blank(ext->dc, windows);
+		tegra_dc_blank_wins(ext->dc, windows);
 		for_each_set_bit(i, &windows, DC_N_WINDOWS) {
 			tegra_dc_ext_unpin_window(&ext->win[i]);
 			tegra_dc_disable_window(ext->dc, i);

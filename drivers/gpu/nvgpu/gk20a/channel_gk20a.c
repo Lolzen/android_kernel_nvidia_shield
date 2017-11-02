@@ -1,7 +1,7 @@
 /*
  * GK20A Graphics channel
  *
- * Copyright (c) 2011-2016, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2011-2017, NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -666,11 +666,12 @@ static int gk20a_init_error_notifier(struct channel_gk20a *ch,
 	return 0;
 }
 
-void gk20a_set_error_notifier(struct channel_gk20a *ch, __u32 error)
+/**
+ * gk20a_set_error_notifier_locked()
+ * Should be called with ch->error_notifier_mutex held
+ */
+void gk20a_set_error_notifier_locked(struct channel_gk20a *ch, __u32 error)
 {
-	bool notifier_set = false;
-
-	mutex_lock(&ch->error_notifier_mutex);
 	if (ch->error_notifier_ref) {
 		struct timespec time_data;
 		u64 nsec;
@@ -684,13 +685,16 @@ void gk20a_set_error_notifier(struct channel_gk20a *ch, __u32 error)
 		ch->error_notifier->info32 = error;
 		ch->error_notifier->status = 0xffff;
 
-		notifier_set = true;
-	}
-	mutex_unlock(&ch->error_notifier_mutex);
-
-	if (notifier_set)
 		gk20a_err(dev_from_gk20a(ch->g),
 		    "error notifier set to %d for ch %d", error, ch->hw_chid);
+	}
+}
+
+void gk20a_set_error_notifier(struct channel_gk20a *ch, __u32 error)
+{
+	mutex_lock(&ch->error_notifier_mutex);
+	gk20a_set_error_notifier_locked(ch, error);
+	mutex_unlock(&ch->error_notifier_mutex);
 }
 
 static void gk20a_free_error_notifiers(struct channel_gk20a *ch)
@@ -855,11 +859,10 @@ static void gk20a_free_channel(struct channel_gk20a *ch)
 	}
 	mutex_unlock(&ch->sync_lock);
 
-	/* release channel binding to the as_share */
-	if (ch_vm->as_share)
-		gk20a_as_release_share(ch_vm->as_share);
-	else
-		gk20a_vm_put(ch_vm);
+	/*
+	 * When releasing the channel we unbind the VM - so release the ref.
+	 */
+	gk20a_vm_put(ch_vm);
 
 	spin_lock(&ch->update_fn_lock);
 	ch->update_fn = NULL;
@@ -1550,22 +1553,16 @@ static int gk20a_channel_add_job(struct channel_gk20a *c,
 	struct mapped_buffer_node **mapped_buffers = NULL;
 	int err = 0, num_mapped_buffers = 0;
 
-	/* job needs reference to this vm (released in channel_update) */
-	gk20a_vm_get(vm);
-
 	if (!skip_buffer_refcounting) {
 		err = gk20a_vm_get_buffers(vm, &mapped_buffers,
 					&num_mapped_buffers);
-		if (err) {
-			gk20a_vm_put(vm);
+		if (err)
 			return err;
-		}
 	}
 
 	job = kzalloc(sizeof(*job), GFP_KERNEL);
 	if (!job) {
 		gk20a_vm_put_buffers(vm, mapped_buffers, num_mapped_buffers);
-		gk20a_vm_put(vm);
 		return -ENOMEM;
 	}
 
@@ -1657,8 +1654,6 @@ static void gk20a_channel_clean_up_jobs(struct work_struct *work)
 		gk20a_free_priv_cmdbuf(c, job->wait_cmd);
 		gk20a_free_priv_cmdbuf(c, job->incr_cmd);
 
-		/* job is done. release its vm reference (taken in add_job) */
-		gk20a_vm_put(vm);
 		/* another bookkeeping taken in add_job. caller must hold a ref
 		 * so this wouldn't get freed here. */
 		gk20a_channel_put(c);

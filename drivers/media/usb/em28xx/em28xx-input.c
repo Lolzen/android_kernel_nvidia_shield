@@ -443,6 +443,7 @@ static int em28xx_ir_change_protocol(struct rc_dev *rc_dev, u64 *rc_type)
 	case CHIP_ID_EM2884:
 	case CHIP_ID_EM2874:
 	case CHIP_ID_EM28174:
+	case CHIP_ID_EM28178:
 		return em2874_ir_change_protocol(rc_dev, rc_type);
 	default:
 		printk("Unrecognized em28xx chip id 0x%02x: IR not supported\n",
@@ -506,6 +507,7 @@ static void em28xx_register_snapshot_button(struct em28xx *dev)
 {
 	struct input_dev *input_dev;
 	int err;
+	struct usb_device *udev = interface_to_usbdev(dev->intf);
 
 	em28xx_info("Registering snapshot button...\n");
 	input_dev = input_allocate_device();
@@ -514,7 +516,7 @@ static void em28xx_register_snapshot_button(struct em28xx *dev)
 		return;
 	}
 
-	usb_make_path(dev->udev, dev->snapshot_button_path,
+	usb_make_path(udev, dev->snapshot_button_path,
 		      sizeof(dev->snapshot_button_path));
 	strlcat(dev->snapshot_button_path, "/sbutton",
 		sizeof(dev->snapshot_button_path));
@@ -527,10 +529,10 @@ static void em28xx_register_snapshot_button(struct em28xx *dev)
 	input_dev->keycodesize = 0;
 	input_dev->keycodemax = 0;
 	input_dev->id.bustype = BUS_USB;
-	input_dev->id.vendor = le16_to_cpu(dev->udev->descriptor.idVendor);
-	input_dev->id.product = le16_to_cpu(dev->udev->descriptor.idProduct);
+	input_dev->id.vendor = le16_to_cpu(udev->descriptor.idVendor);
+	input_dev->id.product = le16_to_cpu(udev->descriptor.idProduct);
 	input_dev->id.version = 1;
-	input_dev->dev.parent = &dev->udev->dev;
+	input_dev->dev.parent = &dev->intf->dev;
 
 	err = input_register_device(input_dev);
 	if (err) {
@@ -564,6 +566,7 @@ static int em28xx_ir_init(struct em28xx *dev)
 	int err = -ENOMEM;
 	u64 rc_type;
 	u16 i2c_rc_dev_addr = 0;
+	struct usb_device *udev = interface_to_usbdev(dev->intf);
 
 	if (dev->board.has_snapshot_button)
 		em28xx_register_snapshot_button(dev);
@@ -634,6 +637,7 @@ static int em28xx_ir_init(struct em28xx *dev)
 		case CHIP_ID_EM2884:
 		case CHIP_ID_EM2874:
 		case CHIP_ID_EM28174:
+		case CHIP_ID_EM28178:
 			ir->get_key = em2874_polling_getkey;
 			rc->allowed_protos = RC_BIT_RC5 | RC_BIT_NEC |
 					     RC_BIT_RC6_0;
@@ -659,16 +663,16 @@ static int em28xx_ir_init(struct em28xx *dev)
 	/* init input device */
 	snprintf(ir->name, sizeof(ir->name), "em28xx IR (%s)", dev->name);
 
-	usb_make_path(dev->udev, ir->phys, sizeof(ir->phys));
+	usb_make_path(udev, ir->phys, sizeof(ir->phys));
 	strlcat(ir->phys, "/input0", sizeof(ir->phys));
 
 	rc->input_name = ir->name;
 	rc->input_phys = ir->phys;
 	rc->input_id.bustype = BUS_USB;
 	rc->input_id.version = 1;
-	rc->input_id.vendor = le16_to_cpu(dev->udev->descriptor.idVendor);
-	rc->input_id.product = le16_to_cpu(dev->udev->descriptor.idProduct);
-	rc->dev.parent = &dev->udev->dev;
+	rc->input_id.vendor = le16_to_cpu(udev->descriptor.idVendor);
+	rc->input_id.product = le16_to_cpu(udev->descriptor.idProduct);
+	rc->dev.parent = &dev->intf->dev;
 	rc->driver_name = MODULE_NAME;
 
 	/* all done */

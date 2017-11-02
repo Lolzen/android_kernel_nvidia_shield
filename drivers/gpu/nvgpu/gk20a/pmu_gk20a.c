@@ -991,6 +991,7 @@ int gk20a_init_pmu(struct pmu_gk20a *pmu)
 		g->ops.pmu_ver.get_pmu_seq_out_a_ptr =
 			get_pmu_sequence_out_alloc_ptr_v1;
 		break;
+	case APP_VERSION_GM20B_5:
 	case APP_VERSION_GM20B_4:
 		g->ops.pmu_ver.pg_cmd_eng_buf_load_size =
 				pg_cmd_eng_buf_load_size_v0;
@@ -4023,14 +4024,14 @@ int gk20a_pmu_destroy(struct gk20a *g)
 	if (!support_gk20a_pmu(g->dev))
 		return 0;
 
-	/* make sure the pending operations are finished before we continue */
-	cancel_work_sync(&pmu->pg_init);
-
 	gk20a_pmu_get_elpg_residency_gating(g, &elpg_ingating_time,
 		&elpg_ungating_time, &gating_cnt);
 
 	gk20a_pmu_disable_elpg(g);
 	pmu->initialized = false;
+	pmu->pmu_state = PMU_STATE_OFF;
+	/* make sure the pending operations are finished before we continue */
+	cancel_work_sync(&pmu->pg_init);
 
 	/* update the s/w ELPG residency counters */
 	g->pg_ingating_time_us += (u64)elpg_ingating_time;
@@ -4042,7 +4043,6 @@ int gk20a_pmu_destroy(struct gk20a *g)
 	pmu->isr_enabled = false;
 	mutex_unlock(&pmu->isr_mutex);
 
-	pmu->pmu_state = PMU_STATE_OFF;
 	pmu->pmu_ready = false;
 	pmu->perfmon_ready = false;
 	pmu->zbc_ready = false;

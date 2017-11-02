@@ -2113,6 +2113,14 @@ wl_run_escan(struct wl_priv *wl, struct net_device *ndev,
 			if (!wl_get_valid_channels(ndev, chan_buf, sizeof(chan_buf))) {
 				list = (wl_uint32_list_t *) chan_buf;
 				n_valid_chan = dtoh32(list->count);
+				if (n_valid_chan > WL_NUMCHANNELS) {
+					WL_ERR(("wrong n_valid_chan:%d\n",
+						n_valid_chan));
+					kfree(default_chan_list);
+					err = -EINVAL;
+					goto exit;
+				}
+
 				for (i = 0; i < num_chans; i++)
 				{
 					_freq = request->channels[i]->center_freq;
@@ -5098,6 +5106,12 @@ wl_cfg80211_mgmt_tx(struct wiphy *wiphy, bcm_struct_cfgdev *cfgdev,
 
 	if (!wl)
 		return ERR_PTR(-EINVAL);
+
+	if (len > (ACTION_FRAME_SIZE + DOT11_MGMT_HDR_LEN)) {
+		WL_ERR(("bad length:%zu\n", len));
+		return BCME_BADARG;
+	}
+
 	dev = cfgdev_to_wlc_ndev(cfgdev, wl);
 
 	/* find bssidx based on dev */

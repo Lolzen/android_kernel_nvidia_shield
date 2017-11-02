@@ -4,7 +4,7 @@
  * Copyright (C) 2010 Google, Inc.
  * Author: Erik Gilling <konkers@android.com>
  *
- * Copyright (c) 2011-2016, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2011-2017, NVIDIA CORPORATION.  All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -99,6 +99,7 @@ enum {
 
 struct tegra_edid_pvt;
 
+#define EDID_BYTES_PER_BLOCK	128
 #define EDID_BASE_HEADER_SIZE 8
 static const unsigned char edid_base_header[EDID_BASE_HEADER_SIZE] = {
 	0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00
@@ -134,6 +135,10 @@ enum {
 #define TEGRA_EDID_QUIRK_NO_YUV     (1 << 0)
 /* TV needs us to delay HDCP by a few seconds */
 #define TEGRA_EDID_QUIRK_DELAY_HDCP (1 << 1)
+/* TVs that blank screen if we try to do HDCP at all */
+#define TEGRA_EDID_QUIRK_NO_HDCP    (1 << 2)
+/* Denon 2313 doesn't support YUV422, but declares support for it */
+#define TEGRA_EDID_QUIRK_NO_YUV_422	(1 << 3)
 
 struct tegra_edid {
 	struct tegra_edid_pvt	*data;
@@ -196,4 +201,5 @@ int tegra_edid_underscan_supported(struct tegra_edid *edid);
 int tegra_edid_i2c_adap_change_rate(struct i2c_adapter *i2c_adap, int rate);
 int tegra_edid_read_block(struct tegra_edid *edid, int block, u8 *data);
 int tegra_edid_audio_supported(struct tegra_edid *edid);
+int tegra_edid_get_source_physical_address(struct tegra_edid *edid, u8 *phy_address);
 #endif

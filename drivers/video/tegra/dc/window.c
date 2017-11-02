@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2010 Google, Inc.
  *
- * Copyright (c) 2010-2016, NVIDIA CORPORATION, All rights reserved.
+ * Copyright (c) 2010-2017, NVIDIA CORPORATION, All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -243,6 +243,42 @@ static void tegra_dc_blend_sequential(struct tegra_dc *dc,
 			WIN_BLEND_FACT_SRC_COLOR_NOMATCH_SEL_NEG_K1_TIMES_DST |
 			WIN_BLEND_FACT_DST_COLOR_NOMATCH_SEL_K1 |
 			WIN_BLEND_FACT_SRC_ALPHA_NOMATCH_SEL_K2 |
+			WIN_BLEND_FACT_DST_ALPHA_NOMATCH_SEL_ZERO,
+			DC_WINBUF_BLEND_NOMATCH_SELECT);
+
+			tegra_dc_writel(dc,
+					WIN_ALPHA_1BIT_WEIGHT0(0) |
+					WIN_ALPHA_1BIT_WEIGHT1(0xff),
+					DC_WINBUF_BLEND_ALPHA_1BIT);
+		} else if (blend->flags[idx] & TEGRA_WIN_FLAG_BLEND_ADD) {
+#if defined(CONFIG_TEGRA_DC_BLENDER_DEPTH)
+			tegra_dc_writel(dc,
+					WIN_K1(0xff) |
+					WIN_K2(0xff) |
+					WIN_BLEND_ENABLE |
+					WIN_DEPTH(dc->blend.z[idx]),
+					DC_WINBUF_BLEND_LAYER_CONTROL);
+#else
+			tegra_dc_writel(dc,
+					WIN_K1(0xff) |
+					WIN_K2(0xff) |
+					WIN_BLEND_ENABLE,
+					DC_WINBUF_BLEND_LAYER_CONTROL);
+#endif
+
+			tegra_dc_writel(dc,
+			/* note: WIN_BLEND_FACT_SRC_COLOR_MATCH_SEL_ONE is not
+			 * supported. Use K1 set to one instead. */
+			WIN_BLEND_FACT_SRC_COLOR_MATCH_SEL_K1 |
+			WIN_BLEND_FACT_DST_COLOR_MATCH_SEL_ONE|
+			WIN_BLEND_FACT_SRC_ALPHA_MATCH_SEL_ZERO |
+			WIN_BLEND_FACT_DST_ALPHA_MATCH_SEL_ZERO,
+			DC_WINBUF_BLEND_MATCH_SELECT);
+
+			tegra_dc_writel(dc,
+			WIN_BLEND_FACT_SRC_COLOR_NOMATCH_SEL_ZERO |
+			WIN_BLEND_FACT_DST_COLOR_NOMATCH_SEL_ZERO |
+			WIN_BLEND_FACT_SRC_ALPHA_NOMATCH_SEL_ZERO |
 			WIN_BLEND_FACT_DST_ALPHA_NOMATCH_SEL_ZERO,
 			DC_WINBUF_BLEND_NOMATCH_SELECT);
 
@@ -634,6 +670,7 @@ static int _tegra_dc_program_windows(struct tegra_dc *dc,
 
 		if (!WIN_IS_ENABLED(win)) {
 		#define RGB_TO_YUV420_8BPC_BLACK_PIX 0x00801010
+		#define RGB_TO_YUV420_10BPC_BLACK_PIX 0x00000000
 		#define RGB_TO_YUV422_10BPC_BLACK_PIX 0x00001080
 		#define RGB_TO_YUV444_8BPC_BLACK_PIX 0x00801080
 
@@ -645,6 +682,12 @@ static int _tegra_dc_program_windows(struct tegra_dc *dc,
 				case FB_VMODE_Y420_ONLY | FB_VMODE_Y24:
 					tegra_dc_writel(dc,
 						RGB_TO_YUV420_8BPC_BLACK_PIX,
+						DC_DISP_BLEND_BACKGROUND_COLOR);
+					break;
+				case FB_VMODE_Y420 | FB_VMODE_Y30:
+				case FB_VMODE_Y420_ONLY | FB_VMODE_Y30:
+					tegra_dc_writel(dc,
+						RGB_TO_YUV420_10BPC_BLACK_PIX,
 						DC_DISP_BLEND_BACKGROUND_COLOR);
 					break;
 				case FB_VMODE_Y422 | FB_VMODE_Y36:
@@ -805,6 +848,7 @@ static int _tegra_dc_program_windows(struct tegra_dc *dc,
 			tegra_dc_writel(dc, tegra_dc_reg_h32(win->phys_addr_u),
 				DC_WINBUF_START_ADDR_HI_U);
 #endif
+
 			tegra_dc_writel(dc,
 					LINE_STRIDE(win->stride) |
 					UV_LINE_STRIDE(win->stride_uv),

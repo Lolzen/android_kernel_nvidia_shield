@@ -6,7 +6,7 @@
  * Author:
  *	Erik Gilling <konkers@google.com>
  *
- * Copyright (c) 2010-2016, NVIDIA CORPORATION, All rights reserved.
+ * Copyright (c) 2010-2017, NVIDIA CORPORATION, All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -932,10 +932,14 @@ struct tegra_dc_win {
 #define TEGRA_WIN_FLAG_SCAN_COLUMN	(1 << 9)
 #define TEGRA_WIN_FLAG_INTERLACE	(1 << 10)
 #define TEGRA_WIN_FLAG_FB		(1 << 11)
+#define TEGRA_WIN_FLAG_BLEND_ADD	(1 << 12)
+
 #define TEGRA_WIN_FLAG_INVALID		(1 << 31) /* window does not exist. */
 
 #define TEGRA_WIN_BLEND_FLAGS_MASK \
-	(TEGRA_WIN_FLAG_BLEND_PREMULT | TEGRA_WIN_FLAG_BLEND_COVERAGE)
+	(TEGRA_WIN_FLAG_BLEND_PREMULT |  \
+	 TEGRA_WIN_FLAG_BLEND_COVERAGE | \
+	 TEGRA_WIN_FLAG_BLEND_ADD)
 
 /* Note: These are the actual values written to the DC_WIN_COLOR_DEPTH register
  * and may change in new tegra architectures.
@@ -1025,6 +1029,7 @@ struct tegra_dc_platform_data {
 #endif
 	unsigned long		ctrl_num;
 	unsigned long		win_mask;
+	bool		plld2_ss_enable;
 };
 
 struct tegra_dc_bw_data {
@@ -1049,7 +1054,7 @@ bool tegra_dc_has_vsync(struct tegra_dc *dc);
 int tegra_dc_vsync_enable(struct tegra_dc *dc);
 void tegra_dc_vsync_disable(struct tegra_dc *dc);
 int tegra_dc_wait_for_vsync(struct tegra_dc *dc);
-int tegra_dc_blank(struct tegra_dc *dc, unsigned windows);
+int tegra_dc_blank_wins(struct tegra_dc *dc, unsigned windows);
 int tegra_dc_restore(struct tegra_dc *dc);
 
 void tegra_dc_enable(struct tegra_dc *dc);
@@ -1135,6 +1140,7 @@ int tegra_dc_get_panel_sync_rate(void);
 
 int tegra_dc_get_head(const struct tegra_dc *dc);
 int tegra_dc_get_out(const struct tegra_dc *dc);
+int tegra_dc_get_source_physical_address(u8 *phy_address);
 
 struct device_node *tegra_dc_get_hdmi_node(int id);
 
